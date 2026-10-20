@@ -1,6 +1,8 @@
 # Fashion-MNIST Classification: Classical ML Comparison and CNN Demo
 
-A concise portfolio version of an NUS CS3244 Machine Learning group project. The repository compares three classical classifiers—with and without PCA—and includes a Streamlit inference application built around the team's best saved CNN checkpoint.
+A concise portfolio version of an NUS CS3244 Machine Learning group project. The repository compares three classical classifiers—with and without PCA—and includes a Streamlit inference application built around the team's baseline CNN checkpoint.
+
+**Live demo:** [fashion-mnist-app-geqchmqqdsecn2lfivdnkg.streamlit.app](https://fashion-mnist-app-geqchmqqdsecn2lfivdnkg.streamlit.app/)
 
 ## Dataset
 
@@ -34,9 +36,44 @@ Random Forest produced the strongest saved result. In this experiment, PCA sligh
 
 ## CNN inference
 
-The application uses the group's saved CNN checkpoint at `models/best_fashion_cnn.pth`. The committed architecture has two convolution/max-pooling blocks followed by a 128-unit fully connected layer and a 10-class output layer.
+The application uses the team's baseline CNN checkpoint at `models/best_fashion_cnn.pth` (the filename is historical; it is not the team's best-performing variant). The committed architecture has two convolution/max-pooling blocks followed by a 128-unit fully connected layer and a 10-class output layer.
 
-Inference runs on CPU. An uploaded image is converted to grayscale, resized to 28×28, scaled from `[0, 255]` to `[0, 1]`, and passed to the model. The repository does not contain the CNN training pipeline or a verified CNN evaluation metric, so neither is claimed here.
+The team's final report found that an average-pooling variant ("V4_AvgPool", reported at 92.81% test accuracy) performed best among the CNN variants it compared. That variant's checkpoint is not included or deployed here. The report's figure and the measurement below come from separate runs and evaluation setups, so they should not be compared directly.
+
+Inference runs on CPU. An uploaded image is converted to grayscale, resized to 28×28, scaled from `[0, 255]` to `[0, 1]`, and passed to the model. The repository does not contain the CNN training pipeline, so training is not reproduced here.
+
+### CNN test-set evaluation
+
+`scripts/evaluate_cnn.py` evaluates the deployed checkpoint on the official 10,000-image Fashion-MNIST test set, using the same transform as the app (`pixel / 255`, no other normalization). Result from running the script:
+
+| Metric | Value |
+|---|---:|
+| Accuracy | **0.9342** |
+| Macro F1 | 0.9340 |
+
+| Class | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| T-shirt/top | 0.8821 | 0.8980 | 0.8900 |
+| Trouser | 0.9950 | 0.9920 | 0.9935 |
+| Pullover | 0.8372 | 0.9310 | 0.8816 |
+| Dress | 0.9497 | 0.9440 | 0.9468 |
+| Coat | 0.9161 | 0.8520 | 0.8829 |
+| Sandal | 0.9842 | 0.9960 | 0.9901 |
+| Shirt | 0.8254 | 0.7800 | 0.8021 |
+| Sneaker | 0.9742 | 0.9810 | 0.9776 |
+| Bag | 0.9920 | 0.9940 | 0.9930 |
+| Ankle boot | 0.9908 | 0.9740 | 0.9823 |
+
+Shirt is the weakest class, followed by T-shirt/top, Pullover, and Coat, which are visually similar upper-body garments.
+
+To reproduce, install the app dependencies and run the script from the repository root. It downloads the official test-set idx files from [zalandoresearch/fashion-mnist](https://github.com/zalandoresearch/fashion-mnist) into `data/fashion/` (ignored by git) on first run:
+
+```bash
+python -m pip install -r requirements.txt
+python scripts/evaluate_cnn.py
+```
+
+Inference is deterministic on CPU, so a rerun should print the same values.
 
 ## Streamlit application
 
@@ -76,17 +113,37 @@ python -m pip install -r requirements-notebook.txt
 jupyter lab notebooks/classical_ml_comparison.ipynb
 ```
 
+## Failure analysis
+
+The screenshots below were taken from an earlier version of the app interface, so their wording differs from the current app.
+
+Dataset-style images—a light item centered on a black background—are classified correctly:
+
+![Dataset-style images classified correctly](docs/images/correct_predictions.png)
+
+Real product photos, by contrast, were both predicted as "Bag":
+
+![Real photo of a T-shirt predicted as Bag](docs/images/failure_tshirt_predicted_bag.png)
+
+![Real photo of trousers predicted as Bag](docs/images/failure_trousers_predicted_bag.png)
+
+Fashion-MNIST items are light on a black background, centered, and resized with their aspect ratio preserved. The app only converts an upload to grayscale and stretches it to 28×28. Real photos usually show a dark item on a light background, so they reach the model with inverted contrast and distorted proportions. These failures are therefore a preprocessing mismatch on top of genuine domain shift between studio-normalized dataset images and real photographs. The test-set accuracy above does not measure performance on such photos.
+
 ## Repository structure
 
 ```text
 fashion-mnist-app/
 ├── app.py                              # Streamlit entry point
+├── docs/
+│   └── images/                         # Failure-analysis screenshots
 ├── models/
-│   └── best_fashion_cnn.pth            # Team CNN checkpoint used for inference
+│   └── best_fashion_cnn.pth            # Team baseline CNN checkpoint used for inference
 ├── notebooks/
 │   └── classical_ml_comparison.ipynb   # Classical ML and PCA experiments
 ├── results/
 │   └── classical_model_comparison.csv  # Saved test-set metrics
+├── scripts/
+│   └── evaluate_cnn.py                 # CNN test-set evaluation
 ├── src/
 │   ├── __init__.py
 │   ├── model_cnn.py                    # CNN architecture definition
@@ -98,13 +155,23 @@ fashion-mnist-app/
 ## Limitations
 
 - The CNN training code and training-time preprocessing configuration are not present, so the repository can verify checkpoint compatibility and the current inference transform, but not the full CNN training workflow.
-- No verified CNN test metric is available in this repository.
+- The deployed checkpoint is the team's baseline CNN, not the best-performing variant from the final report.
+- The CNN metric above covers the Fashion-MNIST test set only; there is no labeled evaluation on real photos.
 - The classical notebook does not set random seeds for PCA or Random Forest. A fresh run may therefore differ slightly from the preserved results.
 - The SVM experiments use only the first 10,000 training examples to reduce runtime.
 - The Streamlit demo resizes arbitrary uploads directly; it does not perform background removal, centering, or automatic color inversion.
 
+## Next steps
+
+Possible future work to make the demo more robust on real photos:
+
+- Detect light backgrounds and invert the image so the item is light on dark, as in the dataset.
+- Crop to the item and pad to a square before resizing, preserving the aspect ratio.
+- Show the softmax confidence and abstain from predicting below a threshold.
+- Evaluate on a small labeled set of real photos to measure the effect of these changes.
+
 ## Personal contribution and attribution
 
-My individual contribution covered the Logistic Regression, SVM, Random Forest, and PCA comparison experiments. I also built the CNN inference pipeline and Streamlit application using the team's best CNN checkpoint.
+My individual contribution covered the Logistic Regression, SVM, Random Forest, and PCA comparison experiments. I also built the CNN inference pipeline and Streamlit application using the team's baseline CNN checkpoint.
 
-This work originated as an NUS CS3244 group project. The CNN checkpoint is attributed to the team; this portfolio repository does not claim that I personally trained it.
+This work originated as an NUS CS3244 group project by Chung Jia Cheng (team leader; CNN and ViT), Samantha Lee, Wu Ting, Feliana Hazlan, GU Mingrui, and Manya Wang. The CNN checkpoint is attributed to the team; this portfolio repository does not claim that I personally trained it.
